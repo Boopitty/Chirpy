@@ -15,12 +15,24 @@ func main() {
 	}
 
 	// serve the index.html file on the site on the home page
-	var path http.Dir = "."
-	filepathRoot := http.FileServer(path)
-	mux.Handle("/", filepathRoot)
+	var path http.Dir = "app"
+	handler := http.FileServer(path)
+	mux.Handle("/app/", http.StripPrefix("/app", handler))
+
+	// handler for the healthz file
+	h := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(200)
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			log.Fatalf("Write has failed: %s", err)
+		}
+	}
+
+	mux.HandleFunc("/healthz", h)
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
-	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
+	log.Printf("Serving files from %s on port: %s\n", handler, port)
 	log.Fatal(server.ListenAndServe())
 }
