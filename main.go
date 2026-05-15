@@ -17,7 +17,7 @@ func main() {
 	// serve the index.html file on the site on the home page
 	var path http.Dir = "app"
 	handler := http.FileServer(path)
-	mux.Handle("/app/", http.StripPrefix("/app", handler))
+	mux.Handle("/app/", http.StripPrefix("/app", middlewareLog(handler)))
 
 	// handler for the healthz file
 	h := func(w http.ResponseWriter, _ *http.Request) {
@@ -35,4 +35,11 @@ func main() {
 	// The code is blocked from this point until the server is closed or craches.
 	log.Printf("Serving files from %s on port: %s\n", handler, port)
 	log.Fatal(server.ListenAndServe())
+}
+
+func middlewareLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s", r.Method, r.URL.Path)
+		next.ServeHTTP(w, r)
+	})
 }
