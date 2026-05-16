@@ -6,6 +6,8 @@ import (
 )
 
 func main() {
+	var cfg apiConfig
+
 	// Create a server object with a mutex
 	mux := http.NewServeMux()
 	port := "8080"
@@ -17,9 +19,10 @@ func main() {
 	// serve the index.html file on the site on the home page
 	var path http.Dir = "app"
 	handler := http.FileServer(path)
-	mux.Handle("/app/", http.StripPrefix("/app", middlewareLog(handler)))
+	mux.Handle("/app/", http.StripPrefix("/app", cfg.middlewareMetricsInc(middlewareLog(handler))))
 
 	// handler for the healthz file
+	// This is a health check for the server to check if it's ready to recieve requests.
 	h := func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(200)
@@ -30,6 +33,10 @@ func main() {
 	}
 
 	mux.HandleFunc("/healthz", h)
+
+	mux.HandleFunc("/metrics", cfg.writeHitsHandler())
+
+	mux.HandleFunc("/reset", cfg.resetHitsHandler())
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
