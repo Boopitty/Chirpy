@@ -9,7 +9,7 @@ func main() {
 	var cfg apiConfig
 
 	// Create a server object with a mutex
-	mux := http.NewServeMux()
+	mux := http.NewServeMux() //Create a server mutex
 	port := "8080"
 	server := http.Server{
 		Addr:    ":" + port, // this means the site will be run on a local server
@@ -17,8 +17,8 @@ func main() {
 	}
 
 	// serve the index.html file on the site on the home page
-	var path http.Dir = "app"
-	handler := http.FileServer(path)
+	var path http.Dir = "app"        // Root directory of the server
+	handler := http.FileServer(path) // Returns an http.Handler. It is an interface.
 	mux.Handle("/app/", http.StripPrefix("/app", cfg.middlewareMetricsInc(middlewareLog(handler))))
 
 	// handler for the healthz file
@@ -32,11 +32,12 @@ func main() {
 		}
 	}
 
-	mux.HandleFunc("/healthz", h)
+	// Handlers for multiple functions
+	mux.HandleFunc("GET /healthz", h)
 
-	mux.HandleFunc("/metrics", cfg.writeHitsHandler())
+	mux.HandleFunc("GET /metrics", cfg.writeHitsHandler())
 
-	mux.HandleFunc("/reset", cfg.resetHitsHandler())
+	mux.HandleFunc("POST /reset", cfg.resetHitsHandler())
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
@@ -44,6 +45,7 @@ func main() {
 	log.Fatal(server.ListenAndServe())
 }
 
+// Middleware to log requests in the terminal
 func middlewareLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.URL.Path)
