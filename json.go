@@ -31,7 +31,7 @@ func validateChirpHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Encode request struct if all is well
 	type validResp struct {
-		Valid bool `json:"valid"`
+		Cleaned_body string `json:"cleaned_body"`
 	}
-	respondWithJson(w, http.StatusOK, validResp{Valid: true})
+	respondWithJson(w, http.StatusOK, validResp{Cleaned_body: cleanString(req.Body)})
 }

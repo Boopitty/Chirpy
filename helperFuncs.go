@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 )
 
 // This function will accept an http.ResponseWriter and relevant info to create a response
@@ -37,4 +38,19 @@ func middlewareLog(next http.Handler) http.Handler {
 		log.Printf("%s %s", r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func cleanString(input string) string {
+	words := strings.Split(input, " ")
+	forbidden := []string{"kerfuffle", "sharbert", "fornax"}
+
+	for i, word := range words {
+		for _, forbid := range forbidden {
+			if strings.Contains(strings.ToLower(word), forbid) {
+				words[i] = "****"
+				break
+			}
+		}
+	}
+	return strings.Join(words, " ")
 }
