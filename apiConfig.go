@@ -22,7 +22,14 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 // Returns the number of hits that are stored in the config.
 func (cfg *apiConfig) writeHitsHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		body := fmt.Sprintf("Hits: %d", cfg.fileserverHits.Load())
+		body := fmt.Sprintf(
+			`<html>
+  <body>
+    <h1>Welcome, Chirpy Admin</h1>
+    <p>Chirpy has been visited %d times!</p>
+  </body>
+</html>`, cfg.fileserverHits.Load())
+		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(body))
 	}
 }

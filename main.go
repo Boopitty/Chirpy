@@ -34,21 +34,12 @@ func main() {
 
 	// Handlers for multiple functions
 	mux.HandleFunc("GET /api/healthz", h)
-
-	mux.HandleFunc("GET /api/metrics", cfg.writeHitsHandler())
-
-	mux.HandleFunc("POST /api/reset", cfg.resetHitsHandler())
+	mux.HandleFunc("GET /admin/metrics", cfg.writeHitsHandler())
+	mux.HandleFunc("POST /admin/reset", cfg.resetHitsHandler())
+	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
 	log.Printf("Serving files from %s on port: %s\n", handler, port)
 	log.Fatal(server.ListenAndServe())
-}
-
-// Middleware to log requests in the terminal
-func middlewareLog(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
-	})
 }
