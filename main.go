@@ -1,12 +1,31 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"os"
+
+	"github.com/Boopitty/Chirpy/internal/database"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Could not load godotenv %v", err)
+	}
+
+	dbURL := os.Getenv("DB_URL")
+
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("could not open db: %v", err)
+	}
+
 	var cfg apiConfig
+	cfg.dbQueries = database.New(db)
 
 	// Create a server object with a mutex
 	mux := http.NewServeMux() //Create a server mutex
@@ -19,7 +38,7 @@ func main() {
 	// serve the index.html file on the site on the home page
 	var path http.Dir = "app"        // Root directory of the server
 	handler := http.FileServer(path) // Returns an http.Handler. It is an interface.
-	mux.Handle("/app/", http.StripPrefix("/app", cfg.middlewareMetricsInc(middlewareLog(handler))))
+	mux.Handle("/app/", http.StripPrefix("/app/", cfg.middlewareMetricsInc(middlewareLog(handler))))
 
 	// handler for the healthz file
 	// This is a health check for the server to check if it's ready to recieve requests.
@@ -33,13 +52,13 @@ func main() {
 	}
 
 	// Handlers for multiple functions
-	mux.HandleFunc("GET /api/healthz", h)
-	mux.HandleFunc("GET /admin/metrics", cfg.writeHitsHandler())
-	mux.HandleFunc("POST /admin/reset", cfg.resetHitsHandler())
-	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	mux.HandleFunc("/api/healthz", h)
+	mux.HandleFunc("/admin/metrics", cfg.writeHitsHandler())
+	mux.HandleFunc("/admin/reset", cfg.resetHitsHandler())
+	mux.HandleFunc("/api/validate_chirp", validateChirpHandler)
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
-	log.Printf("Serving files from %s on port: %s\n", handler, port)
+	log.Printf("Serving files from %s on port: %s\n", string(path), port)
 	log.Fatal(server.ListenAndServe())
 }

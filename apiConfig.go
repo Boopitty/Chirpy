@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"net/http"
 	"sync/atomic"
+
+	"github.com/Boopitty/Chirpy/internal/database"
 )
 
+// Used to store server data.
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	dbQueries      *database.Queries
 }
 
 // Increment a counter to keep track of how many times the site has been visited.
