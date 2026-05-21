@@ -55,7 +55,7 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", h)
 	mux.HandleFunc("GET /admin/metrics", cfg.writeHitsHandler())
 	mux.HandleFunc("POST /admin/reset", cfg.resetHandler())
-	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	mux.HandleFunc("POST /api/chirps", cfg.createChirpHandler())
 	mux.HandleFunc("POST /api/users", cfg.createUserHandler())
 
 	// Run ListenAndServe to run the site.

@@ -122,3 +122,59 @@ func (cfg *apiConfig) resetHandler() func(http.ResponseWriter, *http.Request) {
 		respondWithJson(w, http.StatusOK, resp)
 	}
 }
+
+func (cfg *apiConfig) createChirpHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Decode the request
+		req := struct {
+			Body string    `json:"body"`
+			User uuid.UUID `json:"user_id"`
+		}{}
+
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			errBody := fmt.Sprintf("Decoding Error: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// If length of request is too long, give an error
+		if len(req.Body) > 140 {
+			type errResp struct {
+				Error string `json:"error"`
+			}
+			respondWithJson(w, http.StatusBadRequest, errResp{Error: "Chirp is too long"})
+			return
+		}
+
+		// Create the new chirp using the request
+		chirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{
+			ID:        uuid.New(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Body:      req.Body,
+			UserID:    req.User,
+		})
+		if err != nil {
+			errBody := fmt.Sprintf("Problem creating chirp: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+		}
+
+		// Encode response struct if all is well
+		resp := struct {
+			ID         uuid.UUID `json:"id"`
+			Created_at time.Time `json:"created_at"`
+			Updated_at time.Time `json:"updated_at"`
+			Body       string    `json:"body"`
+			User       uuid.UUID `json:"user_id"`
+		}{
+			ID:         chirp.ID,
+			Created_at: chirp.CreatedAt,
+			Updated_at: chirp.UpdatedAt,
+			Body:       chirp.Body,
+			User:       chirp.UserID,
+		}
+		respondWithJson(w, http.StatusCreated, resp)
+	}
+}
