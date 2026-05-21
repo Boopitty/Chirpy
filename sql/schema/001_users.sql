@@ -1,9 +1,9 @@
 -- +goose Up
 CREATE TABLE users (
-    id UUID,
+    id UUID PRIMARY KEY NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
-    email TEXT
+    email TEXT NOT NULL
 );
 
 -- +goose Down

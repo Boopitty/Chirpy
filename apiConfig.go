@@ -2,11 +2,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync/atomic"
+	"time"
 
 	"github.com/Boopitty/Chirpy/internal/database"
+	"github.com/google/uuid"
 )
 
 // Used to store server data.
@@ -38,9 +42,83 @@ func (cfg *apiConfig) writeHitsHandler() func(http.ResponseWriter, *http.Request
 	}
 }
 
-// Reset the hits count.
-func (cfg *apiConfig) resetHitsHandler() func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		cfg.fileserverHits.Store(0)
+// Accepts a json request containing an email address,
+// adds the user to the database,
+// and returns a json response of the new user info.
+func (cfg *apiConfig) createUserHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Decode response body into the new req struct
+		req := struct {
+			Email string `json:"email"`
+		}{}
+
+		decoder := json.NewDecoder(r.Body)
+		err := decoder.Decode(&req)
+		if err != nil {
+			errBody := fmt.Sprintf("Decoding Error: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		now := time.Now()
+		// Create user in database
+		user, err := cfg.dbQueries.CreateUser(r.Context(), database.CreateUserParams{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+			Email:     req.Email,
+		})
+		if err != nil {
+			errBody := fmt.Sprintf("Database Error: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// Respond with user info from database
+		resp := struct {
+			ID        uuid.UUID `json:"id"`
+			CreatedAt time.Time `json:"created_at"`
+			UpdatedAt time.Time `json:"updated_at"`
+			Email     string    `json:"email"`
+		}{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		}
+
+		respondWithJson(w, http.StatusCreated, resp)
+	}
+}
+
+// Delete all users from the database
+// Only accessableto admins
+func (cfg *apiConfig) resetHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// If the request is not from an admin, give a forbidden response
+		platform := os.Getenv("PLATFORM")
+		if platform != "dev" {
+			errBody := struct {
+				Body string `json:"body"`
+			}{
+				Body: "You are not an admin",
+			}
+			respondWithJson(w, http.StatusForbidden, errBody)
+			return
+		}
+
+		// Reset the database
+		err := cfg.dbQueries.Reset(r.Context())
+		if err != nil {
+			errBody := fmt.Sprintf("Problem executing 'reset' command: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+		}
+
+		resp := struct {
+			Body string `json:"body"`
+		}{
+			Body: "Database has been reset.",
+		}
+		respondWithJson(w, http.StatusOK, resp)
 	}
 }

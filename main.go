@@ -52,10 +52,11 @@ func main() {
 	}
 
 	// Handlers for multiple functions
-	mux.HandleFunc("/api/healthz", h)
-	mux.HandleFunc("/admin/metrics", cfg.writeHitsHandler())
-	mux.HandleFunc("/admin/reset", cfg.resetHitsHandler())
-	mux.HandleFunc("/api/validate_chirp", validateChirpHandler)
+	mux.HandleFunc("GET /api/healthz", h)
+	mux.HandleFunc("GET /admin/metrics", cfg.writeHitsHandler())
+	mux.HandleFunc("POST /admin/reset", cfg.resetHandler())
+	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	mux.HandleFunc("POST /api/users", cfg.createUserHandler())
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
