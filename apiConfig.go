@@ -75,19 +75,7 @@ func (cfg *apiConfig) createUserHandler() func(http.ResponseWriter, *http.Reques
 		}
 
 		// Respond with user info from database
-		resp := struct {
-			ID        uuid.UUID `json:"id"`
-			CreatedAt time.Time `json:"created_at"`
-			UpdatedAt time.Time `json:"updated_at"`
-			Email     string    `json:"email"`
-		}{
-			ID:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
-		}
-
-		respondWithJson(w, http.StatusCreated, resp)
+		respondWithJson(w, http.StatusCreated, user)
 	}
 }
 
@@ -161,20 +149,21 @@ func (cfg *apiConfig) createChirpHandler() func(http.ResponseWriter, *http.Reque
 			respondWithError(w, http.StatusInternalServerError, errBody)
 		}
 
-		// Encode response struct if all is well
-		resp := struct {
-			ID         uuid.UUID `json:"id"`
-			Created_at time.Time `json:"created_at"`
-			Updated_at time.Time `json:"updated_at"`
-			Body       string    `json:"body"`
-			User       uuid.UUID `json:"user_id"`
-		}{
-			ID:         chirp.ID,
-			Created_at: chirp.CreatedAt,
-			Updated_at: chirp.UpdatedAt,
-			Body:       chirp.Body,
-			User:       chirp.UserID,
+		// Respond with chirp if all is well
+		respondWithJson(w, http.StatusCreated, chirp)
+	}
+}
+
+func (cfg *apiConfig) getChirpsHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		chirps, err := cfg.dbQueries.GetChirps(r.Context())
+		if err != nil {
+			errBody := fmt.Sprintf("Problem getting chirps: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
 		}
-		respondWithJson(w, http.StatusCreated, resp)
+
+		// Return chirps as JSON
+		respond(w, http.StatusOK, chirps)
 	}
 }

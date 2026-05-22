@@ -8,6 +8,18 @@ import (
 	"strings"
 )
 
+func respond(w http.ResponseWriter, code int, payload any) {
+	// payload should be a struct in json format.
+	data, err := json.Marshal(payload)
+	if err != nil {
+		errResp := fmt.Sprintf("Marshaling Error: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errResp)
+		return
+	}
+	w.WriteHeader(code)
+	w.Write(data)
+}
+
 // This function will accept an http.ResponseWriter and relevant info to create a response
 func respondWithJson(w http.ResponseWriter, code int, payload any) {
 	// payload should be a struct in json format.
