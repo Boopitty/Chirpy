@@ -58,7 +58,7 @@ func main() {
 	mux.HandleFunc("POST /api/chirps", cfg.createChirpHandler())
 	mux.HandleFunc("POST /api/users", cfg.createUserHandler())
 	mux.HandleFunc("GET /api/chirps", cfg.getChirpsHandler())
-
+	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.getChirpHandler())
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
 	log.Printf("Serving files from %s on port: %s\n", string(path), port)

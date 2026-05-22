@@ -167,3 +167,23 @@ func (cfg *apiConfig) getChirpsHandler() func(http.ResponseWriter, *http.Request
 		respond(w, http.StatusOK, chirps)
 	}
 }
+
+func (cfg *apiConfig) getChirpHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idstr := r.PathValue("chirpID")
+		id, err := uuid.Parse(idstr)
+		if err != nil {
+			errBody := fmt.Sprintf("Error parsing uuid: %v", err)
+			respondWithError(w, http.StatusBadRequest, errBody)
+			return
+		}
+
+		chirp, err := cfg.dbQueries.GetChirp(r.Context(), id)
+		if err != nil {
+			errBody := fmt.Sprintf("Problem getting chirp: %v", err)
+			respondWithError(w, http.StatusNotFound, errBody)
+			return
+		}
+		respond(w, http.StatusOK, chirp)
+	}
+}
