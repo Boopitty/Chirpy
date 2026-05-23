@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Boopitty/Chirpy/internal/auth"
 	"github.com/Boopitty/Chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -49,7 +50,8 @@ func (cfg *apiConfig) createUserHandler() func(http.ResponseWriter, *http.Reques
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Decode response body into the new req struct
 		req := struct {
-			Email string `json:"email"`
+			Email    string `json:"email"`
+			Password string `json:"password"`
 		}{}
 
 		decoder := json.NewDecoder(r.Body)
@@ -61,12 +63,19 @@ func (cfg *apiConfig) createUserHandler() func(http.ResponseWriter, *http.Reques
 		}
 
 		now := time.Now()
+		hash, err := auth.HashPassword(req.Password)
+		if err != nil {
+			errBody := fmt.Sprintf("Error hashing password: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+		}
+
 		// Create user in database
 		user, err := cfg.dbQueries.CreateUser(r.Context(), database.CreateUserParams{
-			ID:        uuid.New(),
-			CreatedAt: now,
-			UpdatedAt: now,
-			Email:     req.Email,
+			ID:             uuid.New(),
+			CreatedAt:      now,
+			UpdatedAt:      now,
+			Email:          req.Email,
+			HashedPassword: hash,
 		})
 		if err != nil {
 			errBody := fmt.Sprintf("Database Error: %v", err)
@@ -111,6 +120,7 @@ func (cfg *apiConfig) resetHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+// Creates a chirp
 func (cfg *apiConfig) createChirpHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Decode the request
@@ -154,6 +164,7 @@ func (cfg *apiConfig) createChirpHandler() func(http.ResponseWriter, *http.Reque
 	}
 }
 
+// Gets all chirps in the database
 func (cfg *apiConfig) getChirpsHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		chirps, err := cfg.dbQueries.GetChirps(r.Context())
@@ -168,8 +179,10 @@ func (cfg *apiConfig) getChirpsHandler() func(http.ResponseWriter, *http.Request
 	}
 }
 
+// Get a single chirp from the database
 func (cfg *apiConfig) getChirpHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// get the chirp id from the request URL
 		idstr := r.PathValue("chirpID")
 		id, err := uuid.Parse(idstr)
 		if err != nil {
@@ -178,6 +191,7 @@ func (cfg *apiConfig) getChirpHandler() func(http.ResponseWriter, *http.Request)
 			return
 		}
 
+		// Get the chrip from the db
 		chirp, err := cfg.dbQueries.GetChirp(r.Context(), id)
 		if err != nil {
 			errBody := fmt.Sprintf("Problem getting chirp: %v", err)
@@ -185,5 +199,46 @@ func (cfg *apiConfig) getChirpHandler() func(http.ResponseWriter, *http.Request)
 			return
 		}
 		respond(w, http.StatusOK, chirp)
+	}
+}
+
+// Login handler
+func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Decode the request
+		req := struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}{}
+		err := decodeStruct(r, &req)
+		if err != nil {
+			errBody := fmt.Sprintf("Decoding Error: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// Find the user in the db with the Email
+		user, err := cfg.dbQueries.GetUserByEmail(r.Context(), req.Email)
+		if err != nil {
+			errBody := fmt.Sprintf("Error getting user: %v", err)
+			respondWithError(w, http.StatusBadRequest, errBody)
+			return
+		}
+
+		// Check if passwords match
+		valid, err := auth.CheckPasswordHash(req.Password, user.HashedPassword)
+		if err != nil {
+			errBody := fmt.Sprintf("Error checking password: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// Behave according to validity
+		if valid == false {
+			respond(w, http.StatusUnauthorized, "Incorrect email or password")
+		} else {
+			respondWithJson(w, http.StatusOK, user)
+		}
+
 	}
 }

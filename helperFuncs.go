@@ -66,3 +66,12 @@ func cleanString(input string) string {
 	}
 	return strings.Join(words, " ")
 }
+
+func decodeStruct(r *http.Request, req any) error {
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(req)
+	if err != nil {
+		return err
+	}
+	return nil
+}
