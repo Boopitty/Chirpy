@@ -39,7 +39,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 
 	jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	signed, err := jwtToken.SignedString(tokenSecret)
+	signed, err := jwtToken.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return "", err
 	}
@@ -47,7 +47,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 }
 
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
-	// Claims struct for jwt.ParseWithClaims
+	// Claims struct for storing info parsed with jwt.ParseWithClaims
 	claims := &jwt.RegisteredClaims{}
 
 	// Returns the same key type ([]byte) used when the token was signed.

@@ -8,79 +8,60 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestHashPassword(t *testing.T) {
+func TestHashAndCheckPassword(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
 		// Named input parameters for target function.
-		password string
-		wantErr  bool
+		password      string
+		checkPassword string
+		want          bool
+		wantHashErr   bool
+		wantCheckErr  bool
 	}{
 		{
-			name:     "Normal case",
-			password: "password",
-			wantErr:  false,
+			name:          "Valid Password",
+			password:      "password",
+			checkPassword: "password",
+			want:          true,
+			wantHashErr:   false,
+			wantCheckErr:  false,
 		},
 		{
-			name:     "Empty password",
-			password: "",
-			wantErr:  false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := auth.HashPassword(tt.password)
-			if gotErr != nil {
-				if !tt.wantErr {
-					t.Errorf("HashPassword() failed: %v", gotErr)
-				}
-				return
-			}
-
-			if tt.wantErr {
-				t.Fatal("HashPassword() succeeded unexpectedly")
-			}
-			// TODO: update the condition below to compare got with tt.want.
-			if tt.password == got {
-				t.Errorf("HashPassword() = %v, password has not changed", got)
-			}
-		})
-	}
-}
-
-func TestCheckPasswordHash(t *testing.T) {
-	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for target function.
-		password string
-		hash     string
-		want     bool
-		wantErr  bool
-	}{
-		{
-			name:     "Normal case",
-			password: "coolpassword",
-			want:     true,
-			wantErr:  false,
+			name:          "Wrong Password",
+			password:      "password",
+			checkPassword: "wrong-pasword",
+			want:          false,
+			wantHashErr:   false,
+			wantCheckErr:  false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// hash the password
-			var hashErr error
-			tt.hash, hashErr = auth.HashPassword(tt.password)
+			hash, hashErr := auth.HashPassword(tt.password)
 			if hashErr != nil {
-				t.Errorf("failed to hash password: %v", hashErr)
+				if !tt.wantHashErr {
+					t.Errorf("failed to hash password: %v", hashErr)
+				}
 				return
 			}
+			if tt.wantHashErr {
+				t.Fatalf("HashPassword() succeeded unexpectedly")
+			}
 
-			got, gotErr := auth.CheckPasswordHash(tt.password, tt.hash)
+			if hash == tt.password {
+				t.Errorf("HashPassword() = %v, want other value", hash)
+			}
+
+			// Check the password
+			got, gotErr := auth.CheckPasswordHash(tt.checkPassword, hash)
 			if gotErr != nil {
-				if !tt.wantErr {
+				if !tt.wantCheckErr {
 					t.Errorf("CheckPasswordHash() failed: %v", gotErr)
 				}
 				return
 			}
-			if tt.wantErr {
+			if tt.wantCheckErr {
 				t.Fatal("CheckPasswordHash() succeeded unexpectedly")
 			}
 
@@ -91,67 +72,70 @@ func TestCheckPasswordHash(t *testing.T) {
 	}
 }
 
-func TestMakeJWT(t *testing.T) {
+func TestMakeJWTAndValidate(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
 		// Named input parameters for target function.
-		userID      uuid.UUID
-		tokenSecret string
-		expiresIn   time.Duration
-		want        string
-		wantErr     bool
+		userID          uuid.UUID
+		makeSecret      string
+		validateSecret  string
+		expiresIn       time.Duration
+		wantMakeErr     bool
+		wantValidateErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:            "Valid Token",
+			userID:          uuid.New(),
+			makeSecret:      "super-secret-key",
+			validateSecret:  "super-secret-key",
+			expiresIn:       time.Second,
+			wantMakeErr:     false,
+			wantValidateErr: false,
+		},
+		{
+			name:            "Time Expired",
+			userID:          uuid.New(),
+			makeSecret:      "secret",
+			validateSecret:  "secret",
+			expiresIn:       -time.Second,
+			wantMakeErr:     false,
+			wantValidateErr: true,
+		},
+		{
+			name:            "Wrong Secret",
+			userID:          uuid.New(),
+			makeSecret:      "secret",
+			validateSecret:  "wrong-secret",
+			expiresIn:       time.Second,
+			wantMakeErr:     false,
+			wantValidateErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := auth.MakeJWT(tt.userID, tt.tokenSecret, tt.expiresIn)
+			got, gotErr := auth.MakeJWT(tt.userID, tt.makeSecret, tt.expiresIn)
 			if gotErr != nil {
-				if !tt.wantErr {
+				if !tt.wantMakeErr {
 					t.Errorf("MakeJWT() failed: %v", gotErr)
 				}
 				return
 			}
-
-			if tt.wantErr {
+			if tt.wantMakeErr {
 				t.Fatal("MakeJWT() succeeded unexpectedly")
 			}
 
-			// TODO: update the condition below to compare got with tt.want.
-			if true {
-				t.Errorf("MakeJWT() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestValidateJWT(t *testing.T) {
-	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for target function.
-		tokenString string
-		tokenSecret string
-		want        uuid.UUID
-		wantErr     bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := auth.ValidateJWT(tt.tokenString, tt.tokenSecret)
-			if gotErr != nil {
-				if !tt.wantErr {
-					t.Errorf("ValidateJWT() failed: %v", gotErr)
+			gotID, err := auth.ValidateJWT(got, tt.validateSecret)
+			if err != nil {
+				if !tt.wantValidateErr {
+					t.Errorf("ValidateJWT() failed: %v", err)
 				}
 				return
 			}
-			if tt.wantErr {
+			if tt.wantValidateErr {
 				t.Fatal("ValidateJWT() succeeded unexpectedly")
 			}
-
-			// TODO: update the condition below to compare got with tt.want.
-			if true {
-				t.Errorf("ValidateJWT() = %v, want %v", got, tt.want)
+			if gotID != tt.userID {
+				t.Errorf("ValidateJWT() = %v, want: %v", got, tt.userID)
 			}
 		})
 	}
