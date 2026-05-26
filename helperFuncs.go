@@ -52,6 +52,7 @@ func middlewareLog(next http.Handler) http.Handler {
 	})
 }
 
+// Replaces forbidden words with "****" in a string.
 func cleanString(input string) string {
 	words := strings.Split(input, " ")
 	forbidden := []string{"kerfuffle", "sharbert", "fornax"}
@@ -67,6 +68,7 @@ func cleanString(input string) string {
 	return strings.Join(words, " ")
 }
 
+// Helper function to decode a json request body into a given struct.
 func decodeStruct(r *http.Request, req any) error {
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(req)

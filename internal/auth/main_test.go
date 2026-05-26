@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -82,6 +83,7 @@ func TestMakeJWTAndValidate(t *testing.T) {
 		expiresIn       time.Duration
 		wantMakeErr     bool
 		wantValidateErr bool
+		wantIdErr       bool
 	}{
 		{
 			name:            "Valid Token",
@@ -91,6 +93,7 @@ func TestMakeJWTAndValidate(t *testing.T) {
 			expiresIn:       time.Second,
 			wantMakeErr:     false,
 			wantValidateErr: false,
+			wantIdErr:       false,
 		},
 		{
 			name:            "Time Expired",
@@ -100,6 +103,7 @@ func TestMakeJWTAndValidate(t *testing.T) {
 			expiresIn:       -time.Second,
 			wantMakeErr:     false,
 			wantValidateErr: true,
+			wantIdErr:       false,
 		},
 		{
 			name:            "Wrong Secret",
@@ -109,6 +113,17 @@ func TestMakeJWTAndValidate(t *testing.T) {
 			expiresIn:       time.Second,
 			wantMakeErr:     false,
 			wantValidateErr: true,
+			wantIdErr:       false,
+		},
+		{
+			name:            "Empty User ID",
+			userID:          uuid.Nil,
+			makeSecret:      "secret",
+			validateSecret:  "secret",
+			expiresIn:       time.Second,
+			wantMakeErr:     true,
+			wantValidateErr: false,
+			wantIdErr:       false,
 		},
 	}
 	for _, tt := range tests {
@@ -135,7 +150,54 @@ func TestMakeJWTAndValidate(t *testing.T) {
 				t.Fatal("ValidateJWT() succeeded unexpectedly")
 			}
 			if gotID != tt.userID {
-				t.Errorf("ValidateJWT() = %v, want: %v", got, tt.userID)
+				if !tt.wantIdErr {
+					t.Errorf("ValidateJWT() = %v, want: %v", got, tt.userID)
+				}
+			}
+		})
+	}
+}
+
+func TestGetBearerToken(t *testing.T) {
+	tests := []struct {
+		name string // description of this test case
+		// Named input parameters for target function.
+		headers http.Header
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "Valid Bearer Token",
+			headers: http.Header{
+				"Authorization": []string{"Bearer valid-token"},
+			},
+			want:    "valid-token",
+			wantErr: false,
+		},
+		{
+			name: "Missing Authorization Header",
+			headers: http.Header{
+				"Content-Type": []string{"application/json"},
+			},
+			want:    "",
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotErr := auth.GetBearerToken(tt.headers)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("GetBearerToken() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("GetBearerToken() succeeded unexpectedly")
+			}
+
+			if got != tt.want {
+				t.Errorf("GetBearerToken() = %v, want %v", got, tt.want)
 			}
 		})
 	}

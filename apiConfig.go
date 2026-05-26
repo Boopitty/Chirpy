@@ -18,6 +18,7 @@ import (
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
+	secret         string
 }
 
 // Increment a counter to keep track of how many times the site has been visited.
@@ -125,8 +126,7 @@ func (cfg *apiConfig) createChirpHandler() func(http.ResponseWriter, *http.Reque
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Decode the request
 		req := struct {
-			Body string    `json:"body"`
-			User uuid.UUID `json:"user_id"`
+			Body string `json:"body"`
 		}{}
 
 		decoder := json.NewDecoder(r.Body)
@@ -134,6 +134,22 @@ func (cfg *apiConfig) createChirpHandler() func(http.ResponseWriter, *http.Reque
 		if err != nil {
 			errBody := fmt.Sprintf("Decoding Error: %v", err)
 			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// Get the token from the header
+		token, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			errBody := fmt.Sprintf("Error getting bearer token: %v", err)
+			respondWithError(w, http.StatusUnauthorized, errBody)
+			return
+		}
+
+		// Validate the token and get the user id from the token
+		parsedId, err := auth.ValidateJWT(token, cfg.secret)
+		if err != nil {
+			errBody := fmt.Sprintf("Error validating JWT: %v", err)
+			respondWithError(w, http.StatusUnauthorized, errBody)
 			return
 		}
 
@@ -151,8 +167,8 @@ func (cfg *apiConfig) createChirpHandler() func(http.ResponseWriter, *http.Reque
 			ID:        uuid.New(),
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
-			Body:      req.Body,
-			UserID:    req.User,
+			Body:      cleanString(req.Body),
+			UserID:    parsedId,
 		})
 		if err != nil {
 			errBody := fmt.Sprintf("Problem creating chirp: %v", err)
@@ -207,14 +223,22 @@ func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Decode the request
 		req := struct {
-			Email    string `json:"email"`
-			Password string `json:"password"`
-		}{}
+			Email            string `json:"email"`
+			Password         string `json:"password"`
+			ExpiresInSeconds int    `json:"expires_in_seconds"`
+		}{
+			ExpiresInSeconds: 3600, // default expiration time is 1 hour
+		}
 		err := decodeStruct(r, &req)
 		if err != nil {
 			errBody := fmt.Sprintf("Decoding Error: %v", err)
 			respondWithError(w, http.StatusInternalServerError, errBody)
 			return
+		}
+
+		// The max expiration time is 1 hour, and the min is 1 second.
+		if req.ExpiresInSeconds > 3600 || req.ExpiresInSeconds < 1 {
+			req.ExpiresInSeconds = 3600
 		}
 
 		// Find the user in the db with the Email
@@ -233,11 +257,34 @@ func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
 			return
 		}
 
+		// If the password is correct, make a JWT for the user
+		newToken, err := auth.MakeJWT(user.ID, cfg.secret, time.Duration(time.Duration(req.ExpiresInSeconds)*time.Second))
+		if err != nil {
+			errBody := fmt.Sprintf("Error making JWT: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// Response Structure
+		resp := struct {
+			Id        uuid.UUID `json:"id"`
+			CreatedAt time.Time `json:"created_at"`
+			UpdatedAt time.Time `json:"updated_at"`
+			Email     string    `json:"email"`
+			Token     string    `json:"token"`
+		}{
+			Id:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+			Token:     newToken,
+		}
+
 		// Behave according to validity
 		if valid == false {
 			respond(w, http.StatusUnauthorized, "Incorrect email or password")
 		} else {
-			respondWithJson(w, http.StatusOK, user)
+			respondWithJson(w, http.StatusOK, resp)
 		}
 
 	}

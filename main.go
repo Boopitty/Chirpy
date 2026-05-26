@@ -24,8 +24,14 @@ func main() {
 		log.Fatalf("could not open db: %v", err)
 	}
 
+	secretKey := os.Getenv("SECRET")
+	if secretKey == "" {
+		log.Fatal("SECRET environment variable is not set")
+	}
+
 	var cfg apiConfig
 	cfg.dbQueries = database.New(db)
+	cfg.secret = secretKey
 
 	// Create a server object with a mutex
 	mux := http.NewServeMux() //Create a server mutex

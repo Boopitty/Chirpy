@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/argon2id"
@@ -30,6 +32,10 @@ func CheckPasswordHash(password, hash string) (bool, error) {
 
 // Makes a JSON Web Token for a user
 func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (string, error) {
+	if userID == uuid.Nil {
+		return "", errors.New("invalid user id")
+	}
+
 	claims := jwt.RegisteredClaims{
 		Issuer:    "chirpy-access",
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -46,6 +52,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 	return signed, nil
 }
 
+// Validates a JWT and returns the user id from the subject claim if the token is valid.
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	// Claims struct for storing info parsed with jwt.ParseWithClaims
 	claims := &jwt.RegisteredClaims{}
@@ -62,21 +69,24 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 
 	// Validate the signature of the JWT
 	// and extract the claims into a *jwt.Token struct
-	jwtToken, err := jwt.ParseWithClaims(tokenString, claims, keyFunc)
+	_, err := jwt.ParseWithClaims(tokenString, claims, keyFunc)
 	if err != nil {
 		return uuid.Nil, err
 	}
-	if !jwtToken.Valid {
-		return uuid.Nil, errors.New("invalid token")
-	}
 
 	// Extract user id from subject claim
-	if claims.Subject == "" {
-		return uuid.Nil, jwt.ErrTokenMalformed
-	}
 	id, err := uuid.Parse(claims.Subject)
 	if err != nil {
 		return uuid.Nil, err
 	}
 	return id, nil
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("missing authorization header")
+	}
+	stripedHeader := strings.TrimPrefix(authHeader, "Bearer ")
+	return stripedHeader, nil
 }
