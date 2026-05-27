@@ -66,6 +66,8 @@ func main() {
 	mux.HandleFunc("GET /api/chirps", cfg.getChirpsHandler())
 	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.getChirpHandler())
 	mux.HandleFunc("POST /api/login", cfg.loginHandler())
+	mux.HandleFunc("POST /api/refresh", cfg.refreshHandler())
+	mux.HandleFunc("POST /api/revoke", cfg.revokeHandler())
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.

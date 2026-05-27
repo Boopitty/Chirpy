@@ -2,6 +2,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -223,22 +224,14 @@ func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Decode the request
 		req := struct {
-			Email            string `json:"email"`
-			Password         string `json:"password"`
-			ExpiresInSeconds int    `json:"expires_in_seconds"`
-		}{
-			ExpiresInSeconds: 3600, // default expiration time is 1 hour
-		}
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}{}
 		err := decodeStruct(r, &req)
 		if err != nil {
 			errBody := fmt.Sprintf("Decoding Error: %v", err)
 			respondWithError(w, http.StatusInternalServerError, errBody)
 			return
-		}
-
-		// The max expiration time is 1 hour, and the min is 1 second.
-		if req.ExpiresInSeconds > 3600 || req.ExpiresInSeconds < 1 {
-			req.ExpiresInSeconds = 3600
 		}
 
 		// Find the user in the db with the Email
@@ -258,26 +251,46 @@ func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
 		}
 
 		// If the password is correct, make a JWT for the user
-		newToken, err := auth.MakeJWT(user.ID, cfg.secret, time.Duration(time.Duration(req.ExpiresInSeconds)*time.Second))
+		accessToken, err := auth.MakeJWT(user.ID, cfg.secret, time.Duration(time.Duration(3600)*time.Second))
 		if err != nil {
 			errBody := fmt.Sprintf("Error making JWT: %v", err)
 			respondWithError(w, http.StatusInternalServerError, errBody)
 			return
 		}
 
+		// Make a refresh token for the user and add it to the database
+		refreshToken := auth.MakeRefreshToken()
+		if refreshToken == "" {
+			errBody := "Error making refresh token: got empty string"
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+		_, err = cfg.dbQueries.CreateToken(r.Context(), database.CreateTokenParams{
+			Token:     refreshToken,
+			UserID:    user.ID,
+			ExpiresAt: time.Now().Add(time.Duration(1440) * time.Hour),
+		})
+		if err != nil {
+			errBody := fmt.Sprintf("Error creating refresh token in database: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
 		// Response Structure
 		resp := struct {
-			Id        uuid.UUID `json:"id"`
-			CreatedAt time.Time `json:"created_at"`
-			UpdatedAt time.Time `json:"updated_at"`
-			Email     string    `json:"email"`
-			Token     string    `json:"token"`
+			Id           uuid.UUID `json:"id"`
+			CreatedAt    time.Time `json:"created_at"`
+			UpdatedAt    time.Time `json:"updated_at"`
+			Email        string    `json:"email"`
+			Token        string    `json:"token"`
+			RefreshToken string    `json:"refresh_token"`
 		}{
-			Id:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
-			Token:     newToken,
+			Id:           user.ID,
+			CreatedAt:    user.CreatedAt,
+			UpdatedAt:    user.UpdatedAt,
+			Email:        user.Email,
+			Token:        accessToken,
+			RefreshToken: refreshToken,
 		}
 
 		// Behave according to validity
@@ -287,5 +300,75 @@ func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
 			respondWithJson(w, http.StatusOK, resp)
 		}
 
+	}
+}
+
+func (cfg *apiConfig) refreshHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// This endpoint doesn't accept a request body,
+		// but it does require a refresh token in the header
+		token, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			errBody := fmt.Sprintf("Error getting bearer token: %v", err)
+			respondWithError(w, http.StatusUnauthorized, errBody)
+			return
+		}
+
+		// Get the token from the database
+		dbToken, err := cfg.dbQueries.GetToken(r.Context(), token)
+		if err != nil {
+			errBody := fmt.Sprintf("Error getting token from database: %v", err)
+			respondWithError(w, http.StatusUnauthorized, errBody)
+			return
+		}
+		// If the token is expired or revoked, give an error
+		if dbToken.ExpiresAt.Before(time.Now()) {
+			errBody := "Refresh token has expired"
+			respondWithError(w, http.StatusUnauthorized, errBody)
+			return
+		}
+		if dbToken.RevokedAt.Valid && dbToken.RevokedAt.Time.Before(time.Now()) {
+			errBody := "Refresh token has been revoked"
+			respondWithError(w, http.StatusUnauthorized, errBody)
+			return
+		}
+
+		// If the refresh token is valid, make a new access token and update the database
+		accessToken, err := auth.MakeJWT(dbToken.UserID, cfg.secret, time.Duration(time.Duration(3600)*time.Second))
+		if err != nil {
+			errBody := fmt.Sprintf("Error making JWT: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// If the token is valid, make a new access token for the user
+		resp := struct {
+			Token string `json:"token"`
+		}{
+			Token: accessToken,
+		}
+		respondWithJson(w, http.StatusOK, resp)
+	}
+}
+
+func (cfg *apiConfig) revokeHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			errBody := fmt.Sprintf("Error getting bearer token: %v", err)
+			respondWithError(w, http.StatusUnauthorized, errBody)
+			return
+		}
+
+		_, err = cfg.dbQueries.RevokeToken(r.Context(), database.RevokeTokenParams{
+			RevokedAt: sql.NullTime{Time: time.Now(), Valid: true},
+			Token:     token,
+		})
+		if err != nil {
+			errBody := fmt.Sprintf("Error revoking token in database: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
