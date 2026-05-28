@@ -68,3 +68,35 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	)
 	return i, err
 }
+
+const updateUser = `-- name: UpdateUser :one
+UPDATE users
+SET updated_at = $2, email = $3, hashed_password = $4
+WHERE id = $1
+RETURNING id, created_at, updated_at, email, hashed_password
+`
+
+type UpdateUserParams struct {
+	ID             uuid.UUID `json:"id"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	Email          string    `json:"email"`
+	HashedPassword string    `json:"hashed_password"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUser,
+		arg.ID,
+		arg.UpdatedAt,
+		arg.Email,
+		arg.HashedPassword,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.HashedPassword,
+	)
+	return i, err
+}

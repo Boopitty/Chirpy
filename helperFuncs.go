@@ -41,7 +41,7 @@ func respondWithError(w http.ResponseWriter, code int, body string) {
 	// Log error and write a server error response.
 	log.Printf("%s", body)
 	w.WriteHeader(code)
-	w.Write([]byte("Interal Server Error"))
+	w.Write([]byte("Error Code: " + fmt.Sprint(code)))
 }
 
 // Middleware to log requests in the terminal

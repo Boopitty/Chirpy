@@ -303,24 +303,17 @@ func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+// Handler for the refresh endpoint.
+// This will give a new access token if the refresh token in the header is valid.
 func (cfg *apiConfig) refreshHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// This endpoint doesn't accept a request body,
 		// but it does require a refresh token in the header
-		token, err := auth.GetBearerToken(r.Header)
+		dbToken, err := cfg.validateRefreshToken(w, r)
 		if err != nil {
-			errBody := fmt.Sprintf("Error getting bearer token: %v", err)
-			respondWithError(w, http.StatusUnauthorized, errBody)
 			return
 		}
 
-		// Get the token from the database
-		dbToken, err := cfg.dbQueries.GetToken(r.Context(), token)
-		if err != nil {
-			errBody := fmt.Sprintf("Error getting token from database: %v", err)
-			respondWithError(w, http.StatusUnauthorized, errBody)
-			return
-		}
 		// If the token is expired or revoked, give an error
 		if dbToken.ExpiresAt.Before(time.Now()) {
 			errBody := "Refresh token has expired"
@@ -351,6 +344,8 @@ func (cfg *apiConfig) refreshHandler() func(http.ResponseWriter, *http.Request) 
 	}
 }
 
+// Handler for the revoke endpoint.
+// This will revoke the refresh token in the header, making it invalid for future use.
 func (cfg *apiConfig) revokeHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, err := auth.GetBearerToken(r.Header)
@@ -371,4 +366,90 @@ func (cfg *apiConfig) revokeHandler() func(http.ResponseWriter, *http.Request) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// Handler for the update user endpoint.
+// This will update the user's email and password in the database if the token is valid.
+func (cfg *apiConfig) updateUserHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Validate Access Token
+		userID, err := cfg.validateAccessToken(w, r)
+		if err != nil {
+			return
+		}
+
+		// Decode the request
+		req := struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}{}
+		err = decodeStruct(r, &req)
+		if err != nil {
+			errBody := fmt.Sprintf("Decoding Error: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// Hash the password from the request
+		hash, err := auth.HashPassword(req.Password)
+		if err != nil {
+			errBody := fmt.Sprintf("Error hashing password: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// Update the user in the database with the new email and password
+		user, err := cfg.dbQueries.UpdateUser(r.Context(), database.UpdateUserParams{
+			ID:             userID,
+			UpdatedAt:      time.Now(),
+			Email:          req.Email,
+			HashedPassword: hash,
+		})
+		if err != nil {
+			errBody := fmt.Sprintf("Error updating user in database: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// Respond with the updated user info
+		respondWithJson(w, http.StatusOK, user)
+	}
+}
+
+// Returns a user ID if the refresh token is valid, and gives an error response if not.
+func (cfg *apiConfig) validateAccessToken(w http.ResponseWriter, r *http.Request) (uuid.UUID, error) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		errBody := fmt.Sprintf("Error getting bearer token: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errBody)
+		return uuid.Nil, err
+	}
+
+	userId, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		errBody := fmt.Sprintf("Error validating JWT: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errBody)
+		return uuid.Nil, err
+	}
+
+	return userId, nil
+}
+
+// Returns a refresh token if the token in the header's Access Token is valid, and gives an error response if not.
+func (cfg *apiConfig) validateRefreshToken(w http.ResponseWriter, r *http.Request) (database.RefreshToken, error) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		errBody := fmt.Sprintf("Error getting bearer token: %v", err)
+		respondWithError(w, http.StatusInternalServerError, errBody)
+		return database.RefreshToken{}, err
+	}
+
+	dbToken, err := cfg.dbQueries.GetToken(r.Context(), token)
+	if err != nil {
+		errBody := fmt.Sprintf("Error validating JWT: %v", err)
+		respondWithError(w, http.StatusUnauthorized, errBody)
+		return database.RefreshToken{}, err
+	}
+
+	return dbToken, nil
 }

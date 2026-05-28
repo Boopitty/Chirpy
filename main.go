@@ -68,6 +68,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", cfg.loginHandler())
 	mux.HandleFunc("POST /api/refresh", cfg.refreshHandler())
 	mux.HandleFunc("POST /api/revoke", cfg.revokeHandler())
+	mux.HandleFunc("PUT /api/users", cfg.updateUserHandler())
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
