@@ -29,9 +29,15 @@ func main() {
 		log.Fatal("SECRET environment variable is not set")
 	}
 
+	polkaKey := os.Getenv("POLKA_KEY")
+	if polkaKey == "" {
+		log.Fatal("POLKA_KEY environment variable is not set")
+	}
+
 	var cfg apiConfig
 	cfg.dbQueries = database.New(db)
 	cfg.secret = secretKey
+	cfg.polkaKey = polkaKey
 
 	// Create a server object with a mutex
 	mux := http.NewServeMux() //Create a server mutex

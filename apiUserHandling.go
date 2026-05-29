@@ -192,6 +192,19 @@ func (cfg *apiConfig) updateUserHandler() func(http.ResponseWriter, *http.Reques
 
 func (cfg *apiConfig) polkaWebhookHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Validate API key
+		apiKey, err := auth.GetAPIKey(r.Header)
+		if err != nil {
+			errBody := fmt.Sprintf("Error getting API key: %v", err)
+			respondWithError(w, http.StatusUnauthorized, errBody)
+			return
+		}
+		if apiKey != cfg.polkaKey {
+			errBody := "Invalid API key"
+			respondWithError(w, http.StatusUnauthorized, errBody)
+			return
+		}
+
 		// Decode the request
 		req := struct {
 			Event string `json:"event"`
@@ -199,7 +212,7 @@ func (cfg *apiConfig) polkaWebhookHandler() func(http.ResponseWriter, *http.Requ
 				UserID string `json:"user_id"`
 			} `json:"data"`
 		}{}
-		err := decodeStruct(r, &req)
+		err = decodeStruct(r, &req)
 		if err != nil {
 			errBody := fmt.Sprintf("Decoding Error: %v", err)
 			respondWithError(w, http.StatusInternalServerError, errBody)
