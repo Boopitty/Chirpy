@@ -12,26 +12,29 @@ import (
 )
 
 func main() {
+	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Could not load godotenv %v", err)
 	}
-
+	// Get variables from environment
 	dbURL := os.Getenv("DB_URL")
-
-	db, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		log.Fatalf("could not open db: %v", err)
+	if dbURL == "" {
+		log.Fatal("DB_URL environment variable is not set")
 	}
-
 	secretKey := os.Getenv("SECRET")
 	if secretKey == "" {
 		log.Fatal("SECRET environment variable is not set")
 	}
-
 	polkaKey := os.Getenv("POLKA_KEY")
 	if polkaKey == "" {
 		log.Fatal("POLKA_KEY environment variable is not set")
+	}
+
+	// Open a connection to the database using the URL
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("could not open db: %v", err)
 	}
 
 	var cfg apiConfig

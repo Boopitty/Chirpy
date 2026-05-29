@@ -60,9 +60,32 @@ func (cfg *apiConfig) createChirpHandler() func(http.ResponseWriter, *http.Reque
 	}
 }
 
-// Gets all chirps in the database
+// Gets all chirps in the database. If an "author_id" query parameter is provided, it filters chirps by author.
 func (cfg *apiConfig) getChirpsHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Accept an optional "author_id" query parameter to filter chirps by author
+		authorIDStr := r.URL.Query().Get("author_id")
+		if authorIDStr != "" {
+			// Parse author ID as a UUID
+			authorID, err := uuid.Parse(authorIDStr)
+			if err != nil {
+				errBody := fmt.Sprintf("Error parsing uuid: %v", err)
+				respondWithError(w, http.StatusBadRequest, errBody)
+				return
+			}
+
+			// Gets chirps by author from the db
+			chirps, err := cfg.dbQueries.GetChirpsByAuthor(r.Context(), authorID)
+			if err != nil {
+				errBody := fmt.Sprintf("Problem getting chirps by author: %v", err)
+				respondWithError(w, http.StatusInternalServerError, errBody)
+				return
+			}
+			respond(w, http.StatusOK, chirps)
+			return
+		}
+
+		// Get all chirps from the db
 		chirps, err := cfg.dbQueries.GetChirps(r.Context())
 		if err != nil {
 			errBody := fmt.Sprintf("Problem getting chirps: %v", err)
