@@ -121,6 +121,7 @@ func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
 			Email        string    `json:"email"`
 			Token        string    `json:"token"`
 			RefreshToken string    `json:"refresh_token"`
+			IsChirpyRed  bool      `json:"is_chirpy_red"`
 		}{
 			Id:           user.ID,
 			CreatedAt:    user.CreatedAt,
@@ -128,6 +129,7 @@ func (cfg *apiConfig) loginHandler() func(http.ResponseWriter, *http.Request) {
 			Email:        user.Email,
 			Token:        accessToken,
 			RefreshToken: refreshToken,
+			IsChirpyRed:  user.IsChirpyRed,
 		}
 
 		// Behave according to validity
@@ -185,5 +187,44 @@ func (cfg *apiConfig) updateUserHandler() func(http.ResponseWriter, *http.Reques
 
 		// Respond with the updated user info
 		respondWithJson(w, http.StatusOK, user)
+	}
+}
+
+func (cfg *apiConfig) polkaWebhookHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Decode the request
+		req := struct {
+			Event string `json:"event"`
+			Data  struct {
+				UserID string `json:"user_id"`
+			} `json:"data"`
+		}{}
+		err := decodeStruct(r, &req)
+		if err != nil {
+			errBody := fmt.Sprintf("Decoding Error: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		// If the event is anything other than "user.upgraded",
+		// return a 204 status code with no body.
+		if req.Event != "user.upgraded" {
+			respond(w, http.StatusNoContent, nil)
+			return
+		}
+
+		// Upgrade the user with the given user ID in the database.
+		err = cfg.dbQueries.MakeUserRed(r.Context(), uuid.MustParse(req.Data.UserID))
+		if err != nil {
+			if err.Error() == "sql: no rows in result set" {
+				respond(w, http.StatusNotFound, "User not found")
+				return
+			}
+			errBody := fmt.Sprintf("Error upgrading user in database: %v", err)
+			respondWithError(w, http.StatusInternalServerError, errBody)
+			return
+		}
+
+		respond(w, http.StatusNoContent, nil)
 	}
 }

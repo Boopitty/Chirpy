@@ -70,6 +70,7 @@ func main() {
 	mux.HandleFunc("POST /api/revoke", cfg.revokeHandler())
 	mux.HandleFunc("PUT /api/users", cfg.updateUserHandler())
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", cfg.deleteChirpHandler())
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.polkaWebhookHandler())
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
