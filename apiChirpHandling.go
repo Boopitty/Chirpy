@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/Boopitty/Chirpy/internal/database"
@@ -65,6 +66,9 @@ func (cfg *apiConfig) getChirpsHandler() func(http.ResponseWriter, *http.Request
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Accept an optional "author_id" query parameter to filter chirps by author
 		authorIDStr := r.URL.Query().Get("author_id")
+		var chirps []database.Chirp
+		var err error
+
 		if authorIDStr != "" {
 			// Parse author ID as a UUID
 			authorID, err := uuid.Parse(authorIDStr)
@@ -75,7 +79,7 @@ func (cfg *apiConfig) getChirpsHandler() func(http.ResponseWriter, *http.Request
 			}
 
 			// Gets chirps by author from the db
-			chirps, err := cfg.dbQueries.GetChirpsByAuthor(r.Context(), authorID)
+			chirps, err = cfg.dbQueries.GetChirpsByAuthor(r.Context(), authorID)
 			if err != nil {
 				errBody := fmt.Sprintf("Problem getting chirps by author: %v", err)
 				respondWithError(w, http.StatusInternalServerError, errBody)
@@ -83,16 +87,24 @@ func (cfg *apiConfig) getChirpsHandler() func(http.ResponseWriter, *http.Request
 			}
 			respond(w, http.StatusOK, chirps)
 			return
+		} else {
+			// Get all chirps from the db
+			chirps, err = cfg.dbQueries.GetChirps(r.Context())
+			if err != nil {
+				errBody := fmt.Sprintf("Problem getting chirps: %v", err)
+				respondWithError(w, http.StatusInternalServerError, errBody)
+				return
+			}
 		}
 
-		// Get all chirps from the db
-		chirps, err := cfg.dbQueries.GetChirps(r.Context())
-		if err != nil {
-			errBody := fmt.Sprintf("Problem getting chirps: %v", err)
-			respondWithError(w, http.StatusInternalServerError, errBody)
-			return
+		// Accept an optional "sort" query parameter to sort chirps by creation time
+		// The list is sorted in ascending order by default.
+		sortOrder := r.URL.Query().Get("sort")
+		if sortOrder == "desc" {
+			sort.Slice(chirps, func(i, j int) bool {
+				return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+			})
 		}
-
 		// Return chirps as JSON
 		respond(w, http.StatusOK, chirps)
 	}
