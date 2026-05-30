@@ -94,6 +94,7 @@ func (cfg *apiConfig) refreshHandler() func(http.ResponseWriter, *http.Request) 
 // This will revoke the refresh token in the header, making it invalid for future use.
 func (cfg *apiConfig) revokeHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// This endpoint requires a refresh token in the header
 		token, err := auth.GetBearerToken(r.Header)
 		if err != nil {
 			errBody := fmt.Sprintf("Error getting bearer token: %v", err)

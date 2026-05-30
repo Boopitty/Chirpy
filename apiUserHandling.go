@@ -192,7 +192,7 @@ func (cfg *apiConfig) updateUserHandler() func(http.ResponseWriter, *http.Reques
 
 func (cfg *apiConfig) polkaWebhookHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Validate API key
+		// Validate API key from header for the Polka webhook
 		apiKey, err := auth.GetAPIKey(r.Header)
 		if err != nil {
 			errBody := fmt.Sprintf("Error getting API key: %v", err)

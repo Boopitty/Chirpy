@@ -69,17 +69,20 @@ func main() {
 	// Handlers for multiple functions
 	mux.HandleFunc("GET /api/healthz", h)
 	mux.HandleFunc("GET /admin/metrics", cfg.writeHitsHandler())
+	mux.HandleFunc("GET /api/chirps", cfg.getChirpsHandler())
+	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.getChirpHandler())
+
 	mux.HandleFunc("POST /admin/reset", cfg.resetHandler())
 	mux.HandleFunc("POST /api/chirps", cfg.createChirpHandler())
 	mux.HandleFunc("POST /api/users", cfg.createUserHandler())
-	mux.HandleFunc("GET /api/chirps", cfg.getChirpsHandler())
-	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.getChirpHandler())
 	mux.HandleFunc("POST /api/login", cfg.loginHandler())
 	mux.HandleFunc("POST /api/refresh", cfg.refreshHandler())
 	mux.HandleFunc("POST /api/revoke", cfg.revokeHandler())
-	mux.HandleFunc("PUT /api/users", cfg.updateUserHandler())
-	mux.HandleFunc("DELETE /api/chirps/{chirpID}", cfg.deleteChirpHandler())
 	mux.HandleFunc("POST /api/polka/webhooks", cfg.polkaWebhookHandler())
+
+	mux.HandleFunc("PUT /api/users", cfg.updateUserHandler())
+
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", cfg.deleteChirpHandler())
 
 	// Run ListenAndServe to run the site.
 	// The code is blocked from this point until the server is closed or craches.
